@@ -1,4 +1,6 @@
 #include <iostream>
+#include "spoa/spoa.hpp"           
+#include "bioparser/fastq_reader.hpp" 
 
 using namespace std;
 
