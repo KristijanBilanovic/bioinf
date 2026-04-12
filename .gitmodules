@@ -1,0 +1,6 @@
+[submodule "vendor/vendor/bioparser"]
+	path = vendor/vendor/bioparser
+	url = https://github.com/rvaser/bioparser
+[submodule "vendor/vendor/spoa"]
+	path = vendor/vendor/spoa
+	url = https://github.com/rvaser/spoa
