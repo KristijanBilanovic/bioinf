@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <filesystem>
 #include "spoa/spoa.hpp"           
 #include "bioparser/fastq_parser.hpp"
 #include "MyClass.hpp"
@@ -25,7 +26,7 @@ struct Sequence{
 };
 
 int main() {
-    auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastqParser>("/home/kikib/bioinf/bioinf/data/fastq/J13_L_CE_IonXpress_033.fastq");
+    auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastqParser>("../data/fastq/J13_L_CE_IonXpress_033.fastq");
 
     std::vector<std::unique_ptr<Sequence>> sequences;
     while (true) {
@@ -40,9 +41,8 @@ int main() {
         );
     }
 
-    for (const auto& seq : sequences) {
-        cout << "Name: " << seq->name << endl;
-        cout << "Data: " << seq->data << endl;
-        cout << "Quality: " << seq->quality << endl;
+    for (const auto& file : std::filesystem::directory_iterator("../data/fastq/")) {
+        std::string filename = file.path().filename().string();
+        std::cout << filename << std::endl;
     }
 }
