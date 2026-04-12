@@ -25,7 +25,24 @@ struct Sequence{
 };
 
 int main() {
-    MyClass obj("BioProject");
-    obj.greet();
-    return 0;
+    auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastqParser>("/home/kikib/bioinf/bioinf/data/fastq/J13_L_CE_IonXpress_033.fastq");
+
+    std::vector<std::unique_ptr<Sequence>> sequences;
+    while (true) {
+        auto batch = parser->Parse(1ULL << 30);
+        if (batch.empty()) {
+            break;
+        }
+        sequences.insert(
+            sequences.end(),
+            std::make_move_iterator(batch.begin()),
+            std::make_move_iterator(batch.end())
+        );
+    }
+
+    for (const auto& seq : sequences) {
+        cout << "Name: " << seq->name << endl;
+        cout << "Data: " << seq->data << endl;
+        cout << "Quality: " << seq->quality << endl;
+    }
 }
