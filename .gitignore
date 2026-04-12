@@ -46,3 +46,4 @@ build/
 main
 CMakeLists.txt
 vendor/
+data/
