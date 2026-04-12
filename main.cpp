@@ -37,8 +37,7 @@ std::vector<std::unique_ptr<Sequence>> ParseData(const std::string& path)
             auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastqParser>(file.path().string());
             
             while (true) {
-                // Use smaller buffer: 256MB instead of 1GB
-                auto batch = parser->Parse(256ULL << 20);
+                auto batch = parser->Parse(1ULL << 30);
                 if (batch.empty()) {
                     break;
                 }
