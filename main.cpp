@@ -1,10 +1,12 @@
 #include <iostream>
 #include "spoa/spoa.hpp"           
-#include "bioparser/fastq_reader.hpp" 
+#include "bioparser/fastq_parser.hpp"
+#include "MyClass.hpp"
 
 using namespace std;
 
-int main()
-{
-    cout << "Prvje riječi";
+int main() {
+    MyClass obj("BioProject");
+    obj.greet();
+    return 0;
 }
