@@ -15,7 +15,7 @@ struct Sequence{
         {
             // TODO
         }
-}
+};
 
 int main() {
     MyClass obj("BioProject");
