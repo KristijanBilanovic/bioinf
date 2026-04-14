@@ -1,5 +1,4 @@
 #include "sequence_analyzer.hpp"
-#include "../main.cpp"
 
 std::map<int, std::tuple<int,int>> SequenceAnalyzer::find_nearest_neighbors(){
     std::map<int, std::tuple<int,int>> result;

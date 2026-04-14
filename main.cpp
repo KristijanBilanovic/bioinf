@@ -5,26 +5,9 @@
 #include "bioparser/fastq_parser.hpp"
 #include <map>
 #include <tuple>
+#include "sequence_analyzer.hpp"
 
 using namespace std;
-
-struct Sequence{
-    public:
-        std::string name;
-        std::string data;
-        std::string quality;
-
-        Sequence(
-            const char* name, std::uint32_t name_length, 
-            const char* data, std::uint32_t data_length,
-            const char* quaity, std::uint32_t quality_length
-        )
-        {
-            this->name.assign(name, name_length);
-            this->data.assign(data, data_length);
-            this->quality.assign(quaity, quality_length);
-        }
-};
 
 std::vector<std::unique_ptr<Sequence>> ParseData(const std::string& path)
 {
@@ -99,6 +82,22 @@ int main() {
     cout << "Parsed " << sequences.size() << " sequences." << endl;
 
     cout << "First sequence name: " << sequences[0]->name << endl;
+
+    // filtering by length
+    auto filtered_sequences = filter_by_length(sequences);
+    // analysis 
+    SequenceAnalyzer analyzer(filtered_sequences);
+    auto neighbors = analyzer.find_nearest_neighbors();
+
+    // print of first five results
+    int count = 0;
+    for (const auto& [id, data] : neighbors) {
+        auto [neighbor_id, distance] = data;
+        cout << "Seq " << id
+             << " -> nearest: Seq " << neighbor_id
+             << " (dist=" << distance << ")\n";
+        if (++count >= 5) break;
+    }
 
     return 0;
 }
