@@ -9,6 +9,7 @@
 
 using namespace std;
 
+// Function to parse all FASTQ files in a directory and return a vector of Sequences
 std::vector<std::unique_ptr<Sequence>> ParseData(const std::string& path)
 {
     std::vector<std::unique_ptr<Sequence>> sequences;
@@ -57,11 +58,11 @@ int mode_length(const std::vector<std::unique_ptr<Sequence>>& seqs) {
     return best_length;
 
 }
+
 // filtering by most common length 
 // keep ones that are within [mode - 5, mode + 5]
 std::vector<std::unique_ptr<Sequence>> filter_by_length(std::vector<std::unique_ptr<Sequence>>& seqs) {
     int mode = mode_length(seqs);
-    std::cout << "Most common length: " << mode << endl;
 
     std::vector<std::unique_ptr<Sequence>> filtered;
     for (auto& s : seqs) {
@@ -72,19 +73,16 @@ std::vector<std::unique_ptr<Sequence>> filter_by_length(std::vector<std::unique_
         }
 
     }
-    std::cout << "Filtered down to " << filtered.size() << " sequences." << endl;
     return filtered;
 
 }
 
 int main() {
     auto sequences = ParseData("../data/fastq/");
-    cout << "Parsed " << sequences.size() << " sequences." << endl;
-
-    cout << "First sequence name: " << sequences[0]->name << endl;
 
     // filtering by length
     auto filtered_sequences = filter_by_length(sequences);
+    
     // analysis 
     SequenceAnalyzer analyzer(filtered_sequences);
     auto neighbors = analyzer.find_nearest_neighbors();

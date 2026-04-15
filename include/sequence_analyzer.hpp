@@ -1,10 +1,12 @@
 #pragma once
 #include <map>
 #include <tuple>
+#include <cstdint>
 #include <vector>
 #include <climits>
 #include <iostream>
 #include <memory>
+#include <algorithm>
 
 struct Sequence{
     public:
