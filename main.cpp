@@ -81,25 +81,25 @@ std::vector<std::string> generate_msa(
     return graph.GenerateMultipleSequenceAlignment();
 }
 
-int main() {
-    auto sequences = ParseData("../data/fastq/");
-
-    // filtering by length
-    auto filtered_sequences = filter_by_length(sequences);
-    
-    // analysis 
-    SequenceAnalyzer analyzer(filtered_sequences);
-    auto neighbors = analyzer.find_nearest_neighbors();
-
-    // print of first five results
-    int count = 0;
-    for (const auto& [id, data] : neighbors) {
-        auto [neighbor_id, distance] = data;
-        cout << "Seq " << id
-             << " -> nearest: Seq " << neighbor_id
-             << " (dist=" << distance << ")\n";
-        if (++count >= 5) break;
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        cout << "Usage: ./jelen_analiza <file.fastq>\n";
+        return 1;
     }
+
+    auto sequences = ParseData(argv[1]);
+    cout << "Parsed: " << sequences.size() << " sequences.\n";
+
+    auto filtered = filter_by_length(sequences);
+    cout << "Filtered: " << filtered.size() << " sequences.\n";
+
+    auto msa = generate_msa(filtered);
+    cout << "MSA done: " << msa.size() << " sequences.\n";
+    cout << "Aligned length: " << msa[0].size() << "\n";
+
+    // TODO: uncomment later for centroid analysis
+    // SequenceAnalyzer analyzer(filtered);
+    // auto neighbors = analyzer.find_nearest_neighbors();
 
     return 0;
 }
