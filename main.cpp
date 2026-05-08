@@ -81,6 +81,51 @@ std::vector<std::string> generate_msa(
     return graph.GenerateMultipleSequenceAlignment();
 }
 
+//Clusters aligned sequences using greedy approach and Hamming distance
+std::vector<std::vector<int>> cluster_sequences(
+    const std::vector<std::string>& msa,
+    int k = 12)
+{
+    std::vector<std::vector<int>> clusters;
+    std::vector<int> representatives; 
+
+    for (int i = 0; i < (int)msa.size(); i++) {
+        bool added = false;
+
+        // compare current sequence with representatives of existing clusters
+        for (int c = 0; c < (int)clusters.size(); c++) {
+            int rep = representatives[c];
+
+            //hamming distance of current sequence and representative
+            int dist = 0;
+            for (int p = 0; p < (int)msa[i].size(); p++) {
+                if (msa[i][p] != msa[rep][p]) dist++;
+            }
+
+            // if close enough to representative, add to cluster and stop looking
+            if (dist < k) {
+                clusters[c].push_back(i);
+                added = true;
+                break;
+            }
+        }
+
+        // if not close to any representative, create new cluster with this sequence as representative
+        if (!added) {
+            clusters.push_back({i});
+            representatives.push_back(i);
+        }
+    }
+
+    //  sort clusters by size, largest first
+    std::sort(clusters.begin(), clusters.end(),
+        [](const std::vector<int>& a, const std::vector<int>& b) {
+            return a.size() > b.size();
+        });
+
+    return clusters;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         cout << "Usage: ./jelen_analiza <file.fastq>\n";
@@ -97,6 +142,10 @@ int main(int argc, char* argv[]) {
     cout << "MSA done: " << msa.size() << " sequences.\n";
     cout << "Aligned length: " << msa[0].size() << "\n";
 
+    auto clusters = cluster_sequences(msa);
+    cout << "Clusters found: " << clusters.size() << "\n";
+    cout << "Largest cluster:  " << clusters[0].size() << " sequences\n";
+    cout << "Second largest:   " << clusters[1].size() << " sequences\n";
     // TODO: uncomment later for centroid analysis
     // SequenceAnalyzer analyzer(filtered);
     // auto neighbors = analyzer.find_nearest_neighbors();
