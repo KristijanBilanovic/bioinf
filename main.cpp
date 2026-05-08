@@ -9,7 +9,7 @@
 
 using namespace std;
 
-// Function to parse all FASTQ files in a directory and return a vector of Sequences
+// Parses a single FASTQ file and returns a vector of Sequences
 std::vector<std::unique_ptr<Sequence>> ParseData(const std::string& filepath) {
     std::vector<std::unique_ptr<Sequence>> sequences;
     auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastqParser>(filepath);
@@ -62,6 +62,23 @@ std::vector<std::unique_ptr<Sequence>> filter_by_length(std::vector<std::unique_
     }
     return filtered;
 
+}
+// generates MSA using spoa
+std::vector<std::string> generate_msa(
+    const std::vector<std::unique_ptr<Sequence>>& seqs)
+{
+    auto engine = spoa::AlignmentEngine::Create(
+        spoa::AlignmentType::kNW,
+        0,   // match
+        -1,  // mismatch
+        -1   // gap
+    );
+    spoa::Graph graph{};
+    for (const auto& s : seqs) {
+        auto alignment = engine->Align(s->data, graph);
+        graph.AddAlignment(alignment, s->data);
+    }
+    return graph.GenerateMultipleSequenceAlignment();
 }
 
 int main() {
