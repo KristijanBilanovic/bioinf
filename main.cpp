@@ -84,7 +84,7 @@ std::vector<std::string> generate_msa(
 //Clusters aligned sequences using greedy approach and Hamming distance
 std::vector<std::vector<int>> cluster_sequences(
     const std::vector<std::string>& msa,
-    int k = 12)
+    int k = 12) // k is the maximum Hamming distance to cluster together
 {
     std::vector<std::vector<int>> clusters;
     std::vector<int> representatives; 
