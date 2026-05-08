@@ -10,30 +10,17 @@
 using namespace std;
 
 // Function to parse all FASTQ files in a directory and return a vector of Sequences
-std::vector<std::unique_ptr<Sequence>> ParseData(const std::string& path)
-{
+std::vector<std::unique_ptr<Sequence>> ParseData(const std::string& filepath) {
     std::vector<std::unique_ptr<Sequence>> sequences;
-
-    // Iterate through all files in the directory and parse those starting with 'J'
-    for (const auto& file : std::filesystem::directory_iterator(path)) {
-        std::string filename = file.path().filename().string();
-
-        if(filename[0] == 'J') {
-            // Create a NEW parser for each file
-            auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastqParser>(file.path().string());
-            
-            while (true) {
-                auto batch = parser->Parse(1ULL << 30);
-                if (batch.empty()) {
-                    break;
-                }
-                sequences.insert(
-                    sequences.end(),
-                    std::make_move_iterator(batch.begin()),
-                    std::make_move_iterator(batch.end())
-                );
-            }
-        }
+    auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastqParser>(filepath);
+    while (true) {
+        auto batch = parser->Parse(1ULL << 30);
+        if (batch.empty()) break;
+        sequences.insert(
+            sequences.end(),
+            std::make_move_iterator(batch.begin()),
+            std::make_move_iterator(batch.end())
+        );
     }
     return sequences;
 }
