@@ -8,6 +8,13 @@
 #include <memory>
 #include <algorithm>
 
+/*
+    Sequence structure to hold the name, data, and quality of a sequence read from a FASTQ file.
+    The constructor takes raw character pointers and their lengths to initialize the string members.
+    @property name: the identifier of the sequence read
+    @property data: the nucleotide sequence
+    @property quality: the quality scores associated with the sequence read
+*/
 struct Sequence{
     public:
         std::string name;
