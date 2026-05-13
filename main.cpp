@@ -88,22 +88,22 @@ std::vector<std::unique_ptr<Sequence>> filter_by_length(std::vector<std::unique_
 
 }
 
-// generates MSA using spoa
-std::vector<std::string> generate_msa(
+// generates SPOA graph
+spoa::Graph generate_spoa_graph(
     const std::vector<std::unique_ptr<Sequence>>& seqs)
 {
     auto engine = spoa::AlignmentEngine::Create(
         spoa::AlignmentType::kNW,
-        0,   // match
-        -1,  // mismatch
-        -1   // gap
+        3,   // match
+        -5,  // mismatch
+        -3   // gap
     );
     spoa::Graph graph{};
     for (const auto& s : seqs) {
         auto alignment = engine->Align(s->data, graph);
         graph.AddAlignment(alignment, s->data);
     }
-    return graph.GenerateMultipleSequenceAlignment();
+    return graph;
 }
 
 /*
@@ -316,13 +316,34 @@ int main(int argc, char* argv[]) {
     auto clusters = cluster(filtered);
     cout << "Clusters: " << clusters.size() << "\n";
 
-    // Step 5: Generate MSA using spoa for each cluster and gez its consensus sequence, 
+    // Step 5: Generate MSA using spoa for each cluster and gez its consensus sequence
+
+    std::vector<std::string> consensus_sequences;
+    for (const auto& cluster_indices : clusters) {
+        vector<std::unique_ptr<Sequence>> cluster_seqs;
+
+        // gather sequences for this cluster
+        for (int idx : cluster_indices) {
+            cluster_seqs.push_back(std::make_unique<Sequence>(
+                filtered[idx]->name.c_str(), filtered[idx]->name.size(),
+                filtered[idx]->data.c_str(), filtered[idx]->data.size(),
+                filtered[idx]->quality.c_str(), filtered[idx]->quality.size()
+            ));
+        }
+
+        auto graph = generate_spoa_graph(cluster_seqs);
+        auto consensus = graph.GenerateConsensus();
+
+        // take first sequence as consensus
+        if (!consensus.empty()) {
+            consensus_sequences.push_back(consensus); 
+            cout<< "Cluster " << consensus_sequences.size() << "; " << "size: " << consensus.size() << "\n";
+        }
+    }
+    cout << "Generated " << consensus_sequences.size() << " consensus sequences.\n"; 
     
     // Step 6: Compare cluster consensus sequences to ground truth using Hamming distance and report results
 
-    auto msa = generate_msa(filtered);
-    cout << "MSA done: " << msa.size() << " sequences.\n";
-    cout << "Aligned length: " << msa[0].size() << "\n";
 
 
     return 0;
