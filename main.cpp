@@ -334,7 +334,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Step 1: Load ground truth data (for evaluation)
+    // Load ground truth data (for evaluation)
     auto ground_truth_29 = ParseData("../data/fastq/J29_B_CE_IonXpress_005.fastq");
     auto ground_truth_30 = ParseData("../data/fastq/J30_B_CE_IonXpress_006.fastq");
 
@@ -369,23 +369,85 @@ int main(int argc, char* argv[]) {
     string gt29_consensus = gt29_cluster_consensus[gt29_largest_cluster_idx];
     string gt30_consensus = gt30_cluster_consensus[gt30_largest_cluster_idx];
 
-    // Step 2: Parse FASTQ file (sample)
+    // Load FASTQ data from the provided file path
     auto sequences = ParseData(argv[1]);
     cout << "Parsed: " << sequences.size() << " sequences.\n";
 
-    // Step 3: Filter sequences by length (keep those close to mode length)
+    // Filter sequences by length (keep those close to mode length)
     auto filtered = filter_by_length(sequences);
     cout << "Filtered: " << filtered.size() << " sequences.\n";
 
-    // Step 4: Cluster sequances before aligning
+    // Cluster sequances before aligning
     auto clusters = cluster(filtered);
     cout << "Clusters: " << clusters.size() << "\n";
 
-    // Step 5: Generate MSA using spoa for each cluster and gez its consensus sequence
+    // Generate consensus sequences for each cluster
     auto consensus_sequences = get_cluster_consensus(filtered, clusters); 
     
-    // Step 6: Compare cluster consensus sequences to ground truth using Hamming distance and report results
+    // Compare cluster consensus sequences to ground truth using Hamming distance and report results
+    for (size_t i = 0; i < consensus_sequences.size(); i++) {
+        const string& consensus = consensus_sequences[i];
 
+        std::vector<std::unique_ptr<Sequence>> concensus_1_and_gt29;
+        std::vector<std::unique_ptr<Sequence>> concensus_1_and_gt30;
+
+        concensus_1_and_gt29.push_back(std::make_unique<Sequence>(
+            "consensus1", strlen("consensus1"),
+            consensus.c_str(), consensus.size(),
+            "", 0
+        ));
+
+        concensus_1_and_gt29.push_back(std::make_unique<Sequence>(
+            "gt29_consensus", strlen("gt29_consensus"),
+            gt29_consensus.c_str(), gt29_consensus.size(),
+            "", 0
+        ));
+
+        concensus_1_and_gt30.push_back(std::make_unique<Sequence>(
+            "consensus1", strlen("consensus1"),
+            consensus.c_str(), consensus.size(),
+            "", 0
+        ));
+
+        concensus_1_and_gt30.push_back(std::make_unique<Sequence>(
+            "gt30_consensus", strlen("gt30_consensus"),
+            gt30_consensus.c_str(), gt30_consensus.size(),
+            "", 0
+        ));
+
+        
+        auto graph_29 = generate_spoa_graph(concensus_1_and_gt29);
+        auto graph_30 = generate_spoa_graph(concensus_1_and_gt30);
+
+        // align consensus to ground truth and generate multiple sequence alignment
+        auto msa_29 = graph_29.GenerateMultipleSequenceAlignment();
+        auto msa_30 = graph_30.GenerateMultipleSequenceAlignment();
+
+        // compute Hamming distance between consensus and ground truth for both files
+        int hamming_distance_29 = 0;
+        int hamming_distance_30 = 0;
+
+        const std::string& aligned_consensus_29 = msa_29[0];
+        const std::string& aligned_gt29 = msa_29[1];
+
+        for (size_t j = 0; j < aligned_consensus_29.size(); j++) {
+            if (aligned_consensus_29[j] != aligned_gt29[j]) {
+                hamming_distance_29++;
+            }
+        }
+
+        const std::string& aligned_consensus_30 = msa_30[0];
+        const std::string& aligned_gt30 = msa_30[1];
+
+        for (size_t j = 0; j < aligned_consensus_30.size(); j++) {
+            if (aligned_consensus_30[j] != aligned_gt30[j]) {
+                hamming_distance_30++;
+            }
+        }
+
+        std::cout << "Cluster " << i << ": Hamming distance to GT29 = " << hamming_distance_29
+                  << ", Hamming distance to GT30 = " << hamming_distance_30 << std::endl;
+    }
 
 
     return 0;
