@@ -338,6 +338,37 @@ int main(int argc, char* argv[]) {
     auto ground_truth_29 = ParseData("../data/fastq/J29_B_CE_IonXpress_005.fastq");
     auto ground_truth_30 = ParseData("../data/fastq/J30_B_CE_IonXpress_006.fastq");
 
+    // Filter ground truth sequences by length to get a clean set of reference sequences
+    auto gt29_filtered = filter_by_length(ground_truth_29);
+    auto gt30_filtered = filter_by_length(ground_truth_30);
+
+    // Cluster ground truth sequences
+    auto gt29_clusters = cluster(gt29_filtered);
+    auto gt30_clusters = cluster(gt30_filtered);
+
+    // Find index of the largest cluster
+    int gt29_largest_cluster_idx = 0;
+    int gt30_largest_cluster_idx = 0;
+    for (int i = 1; i < (int)gt29_clusters.size(); i++) {
+        if (gt29_clusters[i].size() > gt29_clusters[gt29_largest_cluster_idx].size()) {
+            gt29_largest_cluster_idx = i;
+        }
+    }
+
+    for (int i = 1; i < (int)gt30_clusters.size(); i++) {
+        if (gt30_clusters[i].size() > gt30_clusters[gt30_largest_cluster_idx].size()) {
+            gt30_largest_cluster_idx = i;
+        }
+    }
+
+    // Generate consensus sequences for ground truth clusters
+    auto gt29_cluster_consensus = get_cluster_consensus(gt29_filtered, gt29_clusters);
+    auto gt30_cluster_consensus = get_cluster_consensus(gt30_filtered, gt30_clusters);
+
+    // Use the consensus sequence of the largest cluster as the representative ground truth sequence for each file
+    string gt29_consensus = gt29_cluster_consensus[gt29_largest_cluster_idx];
+    string gt30_consensus = gt30_cluster_consensus[gt30_largest_cluster_idx];
+
     // Step 2: Parse FASTQ file (sample)
     auto sequences = ParseData(argv[1]);
     cout << "Parsed: " << sequences.size() << " sequences.\n";
