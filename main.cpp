@@ -106,51 +106,6 @@ std::vector<std::string> generate_msa(
     return graph.GenerateMultipleSequenceAlignment();
 }
 
-//Clusters aligned sequences using greedy approach and Hamming distance
-std::vector<std::vector<int>> cluster_sequences(
-    const std::vector<std::string>& msa,
-    int k = 12) // k is the maximum Hamming distance to cluster together
-{
-    std::vector<std::vector<int>> clusters;
-    std::vector<int> representatives; 
-
-    for (int i = 0; i < (int)msa.size(); i++) {
-        bool added = false;
-
-        // compare current sequence with representatives of existing clusters
-        for (int c = 0; c < (int)clusters.size(); c++) {
-            int rep = representatives[c];
-
-            //hamming distance of current sequence and representative
-            int dist = 0;
-            for (int p = 0; p < (int)msa[i].size(); p++) {
-                if (msa[i][p] != msa[rep][p]) dist++;
-            }
-
-            // if close enough to representative, add to cluster and stop looking
-            if (dist < k) {
-                clusters[c].push_back(i);
-                added = true;
-                break;
-            }
-        }
-
-        // if not close to any representative, create new cluster with this sequence as representative
-        if (!added) {
-            clusters.push_back({i});
-            representatives.push_back(i);
-        }
-    }
-
-    //  sort clusters by size, largest first
-    std::sort(clusters.begin(), clusters.end(),
-        [](const std::vector<int>& a, const std::vector<int>& b) {
-            return a.size() > b.size();
-        });
-
-    return clusters;
-}
-
 /*
     Function to generate k-mers from a sequence.
     @param seq: input sequence
@@ -286,10 +241,58 @@ double minimizer_distance(const string& s1, const string& s2,
 
     int lis = LIS(seq);
 
-    // normalize → similarity → distance
-    double similarity = (double)lis / matches.size();
+    // normalize: how far away are the sequances
+    double similarity = (double)lis / min(m1.size(), m2.size());
     return 1.0 - similarity;
 }
+
+
+/*
+    Clusters sequences based on their minimizer similarity.
+    @param seqs: vector of sequences to cluster
+    @return: vector of clusters, where each cluster is a vector of sequence indices
+*/
+std::vector<std::vector<int>> cluster(
+    const std::vector<std::unique_ptr<Sequence>>& seqs)
+{
+    // parameters for minimizer generation provided in lecture slides
+    int k = 11;
+    int w = 5;
+
+    std::vector<std::vector<int>> clusters;
+    std::vector<int> reps;
+
+    double threshold = 0.4;
+
+    for (int i = 0; i < (int)seqs.size(); i++) {
+
+        bool assigned = false;
+
+        for (int c = 0; c < (int)clusters.size(); c++) {
+
+            double distance = minimizer_distance(
+               seqs[i]->data, 
+               seqs[reps[c]]->data, 
+               k, 
+               w
+            );
+
+            if (distance <= threshold) {
+                clusters[c].push_back(i);
+                assigned = true;
+                break;
+            }
+        }
+
+        if (!assigned) {
+            clusters.push_back({i});
+            reps.push_back(i);
+        }
+    }
+
+    return clusters;
+}
+
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -310,6 +313,8 @@ int main(int argc, char* argv[]) {
     cout << "Filtered: " << filtered.size() << " sequences.\n";
 
     // Step 4: Cluster sequances before aligning
+    auto clusters = cluster(filtered);
+    cout << "Clusters: " << clusters.size() << "\n";
 
     // Step 5: Generate MSA using spoa for each cluster and gez its consensus sequence, 
     
@@ -319,13 +324,6 @@ int main(int argc, char* argv[]) {
     cout << "MSA done: " << msa.size() << " sequences.\n";
     cout << "Aligned length: " << msa[0].size() << "\n";
 
-    auto clusters = cluster_sequences(msa);
-    cout << "Clusters found: " << clusters.size() << "\n";
-    cout << "Largest cluster:  " << clusters[0].size() << " sequences\n";
-    cout << "Second largest:   " << clusters[1].size() << " sequences\n";
-    // TODO: uncomment later for centroid analysis
-    // SequenceAnalyzer analyzer(filtered);
-    // auto neighbors = analyzer.find_nearest_neighbors();
 
     return 0;
 }
