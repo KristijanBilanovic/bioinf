@@ -294,6 +294,40 @@ std::vector<std::vector<int>> cluster(
 }
 
 
+/*
+    Function to generate consensus sequences for each cluster using the SPOA graph.
+    @param seqs: vector of sequences
+    @param clusters: vector of clusters, where each cluster is a vector of sequence indices
+    @return: vector of consensus sequences, one for each cluster
+*/
+std::vector<std::string> get_cluster_consensus(
+    const std::vector<std::unique_ptr<Sequence>>& seqs,
+    const std::vector<std::vector<int>>& clusters)
+{
+    std::vector<std::string> consensus_sequences;
+
+    for (const auto& cluster_indices : clusters) {
+        vector<std::unique_ptr<Sequence>> cluster_seqs;
+
+        // gather sequences for this cluster
+        for (int idx : cluster_indices) {
+            cluster_seqs.push_back(std::make_unique<Sequence>(
+                seqs[idx]->name.c_str(), seqs[idx]->name.size(),
+                seqs[idx]->data.c_str(), seqs[idx]->data.size(),
+                seqs[idx]->quality.c_str(), seqs[idx]->quality.size()
+            ));
+        }
+
+        auto graph = generate_spoa_graph(cluster_seqs);
+        auto consensus = graph.GenerateConsensus();
+
+        if (!consensus.empty()) {
+            consensus_sequences.push_back(consensus); 
+        }
+    }
+    return consensus_sequences;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         cout << "Usage: ./jelen_analiza <file.fastq>\n";
@@ -317,30 +351,7 @@ int main(int argc, char* argv[]) {
     cout << "Clusters: " << clusters.size() << "\n";
 
     // Step 5: Generate MSA using spoa for each cluster and gez its consensus sequence
-
-    std::vector<std::string> consensus_sequences;
-    for (const auto& cluster_indices : clusters) {
-        vector<std::unique_ptr<Sequence>> cluster_seqs;
-
-        // gather sequences for this cluster
-        for (int idx : cluster_indices) {
-            cluster_seqs.push_back(std::make_unique<Sequence>(
-                filtered[idx]->name.c_str(), filtered[idx]->name.size(),
-                filtered[idx]->data.c_str(), filtered[idx]->data.size(),
-                filtered[idx]->quality.c_str(), filtered[idx]->quality.size()
-            ));
-        }
-
-        auto graph = generate_spoa_graph(cluster_seqs);
-        auto consensus = graph.GenerateConsensus();
-
-        // take first sequence as consensus
-        if (!consensus.empty()) {
-            consensus_sequences.push_back(consensus); 
-            cout<< "Cluster " << consensus_sequences.size() << "; " << "size: " << consensus.size() << "\n";
-        }
-    }
-    cout << "Generated " << consensus_sequences.size() << " consensus sequences.\n"; 
+    auto consensus_sequences = get_cluster_consensus(filtered, clusters); 
     
     // Step 6: Compare cluster consensus sequences to ground truth using Hamming distance and report results
 
