@@ -34,6 +34,54 @@ struct Match {
 
 using namespace std;
 
+
+int hamming_distance(const std::string& a,
+                     const std::string& b)
+{
+    if (a.size() != b.size()) {
+        return -1;
+    }
+
+    int dist = 0;
+
+    for (size_t i = 0; i < a.size(); i++) {
+        if (a[i] != b[i]) {
+            dist++;
+        }
+    }
+
+    return dist;
+}
+
+std::pair<int, int> best_hamming_match(
+    const std::string& consensus,
+    const std::string& truth)
+{
+    if (consensus.size() < truth.size()) {
+        return {-1, -1};
+    }
+
+    int best_dist = INT_MAX;
+    int best_pos = -1;
+
+    for (size_t i = 0;
+         i + truth.size() <= consensus.size();
+         i++)
+    {
+        std::string window =
+            consensus.substr(i, truth.size());
+
+        int dist = hamming_distance(window, truth);
+
+        if (dist < best_dist) {
+            best_dist = dist;
+            best_pos = i;
+        }
+    }
+
+    return {best_dist, best_pos};
+}
+
 // Parses a single FASTQ file and returns a vector of Sequences
 std::vector<std::unique_ptr<Sequence>> ParseDataFQ(const std::string& filepath) {
     std::vector<std::unique_ptr<Sequence>> sequences;
@@ -51,8 +99,8 @@ std::vector<std::unique_ptr<Sequence>> ParseDataFQ(const std::string& filepath) 
 }
 
 // Parses a single FASTA file and returns a vector of Sequences
-std::vector<std::unique_ptr<Sequence>> ParseDataFA(const std::string& filepath) {
-    auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(filepath);
+std::vector<std::unique_ptr<SequenceFA>> ParseDataFA(const std::string& filepath) {
+    auto parser = bioparser::Parser<SequenceFA>::Create<bioparser::FastaParser>(filepath);
     auto s = parser->Parse(-1);
     return s;
 }
@@ -101,7 +149,7 @@ spoa::Graph generate_spoa_graph(
     const std::vector<std::unique_ptr<Sequence>>& seqs)
 {
     auto engine = spoa::AlignmentEngine::Create(
-        spoa::AlignmentType::kNW,
+        spoa::AlignmentType::kOV,
         3,   // match
         -5,  // mismatch
         -3   // gap
@@ -266,38 +314,53 @@ std::vector<std::vector<int>> cluster(
     // parameters for minimizer generation provided in lecture slides
     int k = 11;
     int w = 5;
-
+    double threshold = 0.33;
+    
     std::vector<std::vector<int>> clusters;
-    std::vector<int> reps;
-
-    double threshold = 0.1;
-
+    
     for (int i = 0; i < (int)seqs.size(); i++) {
-
         bool assigned = false;
-
+        
+        // Try to assign to existing cluster
         for (int c = 0; c < (int)clusters.size(); c++) {
-
-            double distance = minimizer_distance(
-               seqs[i]->data, 
-               seqs[reps[c]]->data, 
-               k, 
-               w
-            );
-
-            if (distance <= threshold) {
+            // Compare to multiple sequences in cluster, not just representative
+            int comparisons = 0;
+            int similar_count = 0;
+            
+            for (int idx : clusters[c]) {
+                if (comparisons >= 3) break; // Limit comparisons for efficiency
+                
+                double distance = minimizer_distance(
+                    seqs[i]->data, 
+                    seqs[idx]->data, 
+                    k, w
+                );
+                
+                if (distance <= threshold) {
+                    similar_count++;
+                }
+                comparisons++;
+            }
+            
+            // Assign if similar to majority of compared sequences
+            if (similar_count >= (comparisons / 2 + 1)) {
                 clusters[c].push_back(i);
                 assigned = true;
                 break;
             }
         }
-
+        
         if (!assigned) {
             clusters.push_back({i});
-            reps.push_back(i);
         }
     }
 
+    // sort clusters by size (largest first)
+    sort(clusters.begin(), clusters.end(),
+        [](const vector<int>& a, const vector<int>& b) {
+            return a.size() > b.size();
+        });
+    
     return clusters;
 }
 
@@ -360,6 +423,30 @@ int main(int argc, char* argv[]) {
 
     // Generate consensus sequences for each cluster
     auto consensus_sequences = get_cluster_consensus(filtered, clusters); 
+
+    // print consensus sequences
+    for (size_t i = 0; i < consensus_sequences.size(); i++) {
+
+        cout << "=== consensus_" << i << " (" << clusters[i].size() << " seqs) ===\n";
+
+        for (size_t j = 0; j < ground_truth_29.size(); j++) {
+
+            auto [dist, pos] =
+                best_hamming_match(
+                    consensus_sequences[i],
+                    ground_truth_29[j]->data
+                );
+
+            cout << "vs J29B-" << j + 1
+                << " | best Hamming distance = "
+                << dist
+                << " | position = "
+                << pos
+                << "\n";
+        }
+
+        cout << "\n";
+    }
     
 
     return 0;
