@@ -10,7 +10,11 @@
 #include <vector>
 #include <unordered_map>
 #include <cmath>
-#include <bits/stdc++.h>
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <climits>
+#include <unordered_map>
 
 /*
     Structure to represent a minimizer (k-mer and its position in the sequence).
@@ -99,8 +103,8 @@ std::vector<std::unique_ptr<Sequence>> ParseDataFQ(const std::string& filepath) 
 }
 
 // Parses a single FASTA file and returns a vector of Sequences
-std::vector<std::unique_ptr<SequenceFA>> ParseDataFA(const std::string& filepath) {
-    auto parser = bioparser::Parser<SequenceFA>::Create<bioparser::FastaParser>(filepath);
+std::vector<std::unique_ptr<Sequence>> ParseDataFA(const std::string& filepath) {
+    auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(filepath);
     auto s = parser->Parse(-1);
     return s;
 }
@@ -445,9 +449,16 @@ int main(int argc, char* argv[]) {
                 << "\n";
         }
 
+        for (size_t j = 0; j < ground_truth_30.size(); j++) {
+            auto [dist, pos] = best_hamming_match(
+                consensus_sequences[i], ground_truth_30[j]->data);
+            cout << "vs J30B-" << j + 1
+                 << " | best Hamming distance = " << dist
+                 << " | position = " << pos << "\n";
+        }
+
         cout << "\n";
     }
-    
 
     return 0;
 }
