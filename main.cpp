@@ -103,8 +103,8 @@ std::vector<std::unique_ptr<Sequence>> ParseDataFQ(const std::string& filepath) 
 }
 
 // Parses a single FASTA file and returns a vector of Sequences
-std::vector<std::unique_ptr<Sequence>> ParseDataFA(const std::string& filepath) {
-    auto parser = bioparser::Parser<Sequence>::Create<bioparser::FastaParser>(filepath);
+std::vector<std::unique_ptr<SequenceFA>> ParseDataFA(const std::string& filepath) {
+    auto parser = bioparser::Parser<SequenceFA>::Create<bioparser::FastaParser>(filepath);
     auto s = parser->Parse(-1);
     return s;
 }
@@ -332,7 +332,7 @@ std::vector<std::vector<int>> cluster(
             int similar_count = 0;
             
             for (int idx : clusters[c]) {
-                if (comparisons >= 3) break; // Limit comparisons for efficiency
+                if (comparisons >= 5) break; // Limit comparisons for efficiency
                 
                 double distance = minimizer_distance(
                     seqs[i]->data, 
@@ -431,7 +431,9 @@ int main(int argc, char* argv[]) {
     // print consensus sequences
     for (size_t i = 0; i < consensus_sequences.size(); i++) {
 
-        cout << "=== consensus_" << i << " (" << clusters[i].size() << " seqs) ===\n";
+        if (clusters[i].size() < 4) continue; // skip small clusters
+
+        cout << "================== consensus_" << i << " (" << clusters[i].size() << " seqs) ================== \n";
 
         for (size_t j = 0; j < ground_truth_29.size(); j++) {
 
@@ -443,18 +445,22 @@ int main(int argc, char* argv[]) {
 
             cout << "vs J29B-" << j + 1
                 << " | best Hamming distance = "
-                << dist
+                << std::setw(3) << dist
                 << " | position = "
-                << pos
+                << std::setw(3) <<pos
                 << "\n";
         }
+
+        cout << "----------------------------------------------------------\n";
 
         for (size_t j = 0; j < ground_truth_30.size(); j++) {
             auto [dist, pos] = best_hamming_match(
                 consensus_sequences[i], ground_truth_30[j]->data);
             cout << "vs J30B-" << j + 1
-                 << " | best Hamming distance = " << dist
-                 << " | position = " << pos << "\n";
+                 << " | best Hamming distance = " 
+                 << std::setw(3) << dist
+                 << " | position = " 
+                 << std::setw(3) << pos << "\n";
         }
 
         cout << "\n";
