@@ -419,11 +419,11 @@ std::vector<std::string> generate_msa(
 }
 
 /*
-    Function to save consensus sequences as FASTQ file.
+    Function to save consensus sequences as FASTA file.
     Each sequence is named by the cluster size.
     @param consensus_sequences: vector of consensus sequences
     @param clusters: vector of clusters (for size information)
-    @param output_filepath: path to output FASTQ file
+    @param output_filepath: path to output FASTA file
 */
 void save_consensus_fastq(
     const std::vector<std::string>& consensus_sequences,
@@ -436,14 +436,88 @@ void save_consensus_fastq(
         // Create sequence name based on cluster size
         std::string seq_name = "cluster_size_" + std::to_string(clusters[i].size());
         
-        // Write FASTQ format: @name, sequence, +, quality scores (all A's as placeholder)
-        outfile << "@" << seq_name << "\n";
+        // Write FASTA format: >name, sequence
+        outfile << ">" << seq_name << "\n";
         outfile << consensus_sequences[i] << "\n";
-        outfile << "+\n";
-        outfile << std::string(consensus_sequences[i].size(), 'A') << "\n";
     }
     
     outfile.close();
+}
+
+/*
+    Function to load consensus sequences from an existing FASTA file.
+    Returns pairs of (sequence, cluster_size) parsed from the sequence name.
+    @param filepath: path to the FASTA file
+    @return: vector of pairs (sequence, cluster_size)
+*/
+std::vector<std::pair<std::string, int>> load_consensus_fastq(const std::string& filepath)
+{
+    std::vector<std::pair<std::string, int>> consensus_data;
+    std::ifstream infile(filepath);
+    std::string line;
+    
+    while (std::getline(infile, line)) {
+        if (line[0] == '>') {
+            // Parse cluster size from header
+            // Format: >cluster_size_<SIZE>
+            std::string size_str = line.substr(14); // Skip ">cluster_size_"
+            int cluster_size = std::stoi(size_str);
+            
+            // Read sequence
+            std::getline(infile, line);
+            std::string sequence = line;
+            
+            consensus_data.push_back({sequence, cluster_size});
+        }
+    }
+    
+    infile.close();
+    return consensus_data;
+}
+
+/*
+    Structure to store consensus sequence metadata for cross-sample analysis.
+*/
+struct ConsensusMetadata {
+    std::string sequence;
+    std::string sample_name;
+    int cluster_size;
+};
+
+/*
+    Function to align two sequences using SPOA and compute Hamming distance.
+    @param seq1: first sequence
+    @param seq2: second sequence
+    @return: Hamming distance between aligned sequences
+*/
+int hamming_distance_aligned(const std::string& seq1, const std::string& seq2)
+{
+    // If sequences are already the same length, reuse your existing hamming_distance function!
+    if (seq1.size() == seq2.size()) {
+        return hamming_distance(seq1, seq2);
+    }
+    
+    // Wrap strings into temporary Sequence structures to reuse generate_spoa_graph
+    std::vector<std::unique_ptr<Sequence>> pair_seqs;
+    pair_seqs.push_back(std::make_unique<Sequence>("s1", 2, seq1.c_str(), seq1.size(), string(seq1.size(), 'A').c_str(), seq1.size()));
+    pair_seqs.push_back(std::make_unique<Sequence>("s2", 2, seq2.c_str(), seq2.size(), string(seq2.size(), 'A').c_str(), seq2.size()));
+    
+    // Reuse your graph generation logic
+    auto graph = generate_spoa_graph(pair_seqs);
+    auto msa = graph.GenerateMultipleSequenceAlignment();
+    
+    if (msa.size() < 2) {
+        return std::max(seq1.size(), seq2.size());
+    }
+    
+    // Calculate Hamming distance directly on the aligned rows
+    int dist = 0;
+    for (size_t i = 0; i < msa[0].size(); i++) {
+        if (msa[0][i] != msa[1][i]) {
+            dist++;
+        }
+    }
+    return dist;
 }
 
 //Clusters aligned sequences using greedy approach and Hamming distance
@@ -565,9 +639,29 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Store consensus metadata for all samples
+    std::vector<ConsensusMetadata> all_consensuses;
+
     // Process each file
     for (const auto& filepath : files_to_process) {
         cout << "\n========== Processing: " << std::filesystem::path(filepath).filename().string() << " ==========\n";
+
+        // Get sequence name and output file path
+        std::string seq_name = std::filesystem::path(filepath).stem().string();
+        std::string output_file = "../data/clusters/" + seq_name + "_CLUSTERS.fasta";
+
+        // Check if output file already exists
+        if (std::filesystem::exists(output_file)) {
+            cout << "Output file already exists: " << output_file << "\n";
+            cout << "Loading consensus sequences from: " << output_file << "\n";
+            
+            auto loaded_consensuses = load_consensus_fastq(output_file);
+            for (const auto& [seq, size] : loaded_consensuses) {
+                all_consensuses.push_back({seq, seq_name, size});
+            }
+            cout << "Loaded " << loaded_consensuses.size() << " consensus sequences.\n";
+            continue;
+        }
 
         // Load FASTQ data
         auto sequences = ParseDataFQ(filepath);
@@ -600,51 +694,193 @@ int main(int argc, char* argv[]) {
         }
 
         // Save consensus sequences to FASTQ file
-        std::string seq_name = std::filesystem::path(filepath).stem().string();
-        std::string output_file = "../data/clusters/" + seq_name + "_CLUSTERS.fastq";
         save_consensus_fastq(consensus_sequences, clusters, output_file);
         cout << "Saved consensus sequences to: " << output_file << "\n";
+
+        // Store metadata for cross-sample analysis
+        for (size_t i = 0; i < consensus_sequences.size(); i++) {
+            all_consensuses.push_back({consensus_sequences[i], seq_name, (int)clusters[i].size()});
+        }
 
         cout << "Finished with file: " << seq_name << "\n";
     }
 
-    // Print comparison (commented out)
-    /*
-    cout << "\n========== Results ==========\n\n";
-    for (size_t i = 0; i < consensus_sequences.size(); i++) {
+    // Single file analysis: compare to ground truth
+    if (file_choice == 1) {
+        cout << "\n========== Ground Truth Comparison ==========\n";
+        cout << "Which ground truth to compare against?\n";
+        cout << "1) J29B\n";
+        cout << "2) J30B\n";
+        cout << "Enter choice (1 or 2): ";
+        
+        int truth_choice;
+        cin >> truth_choice;
+        cin.ignore();
+        
+        auto& ground_truth = (truth_choice == 1) ? ground_truth_29 : ground_truth_30;
+        std::string truth_name = (truth_choice == 1) ? "J29B" : "J30B";
+        
+        cout << "\n========== Results: " << truth_name << " Comparison ==========\n\n";
+        
+        for (size_t i = 0; i < all_consensuses.size(); i++) {
+            if (all_consensuses[i].cluster_size < 4) continue; // skip small clusters
 
-        if (clusters[i].size() < 4) continue; // skip small clusters
+            cout << "================== " << all_consensuses[i].sample_name 
+                 << " - Cluster size: " << all_consensuses[i].cluster_size 
+                 << " ================== \n";
 
-        cout << "================== consensus_" << i << " (" << clusters[i].size() << " seqs) ================== \n";
+            for (size_t j = 0; j < ground_truth.size(); j++) {
+                auto [dist, pos] = best_hamming_match(all_consensuses[i].sequence,
+                    ground_truth[j]->data);
 
-        for (size_t j = 0; j < ground_truth_29.size(); j++) {
+                cout << "vs " << truth_name << "-" << j + 1
+                    << " | best Hamming distance = "
+                    << std::setw(3) << dist
+                    << " | position = "
+                    << std::setw(3) << pos << "\n";
+            }
 
-            auto [dist,pos] = best_hamming_match(consensus_sequences[i],
-            ground_truth_29[j]-> data);
-
-            cout << "vs J29B-" << j + 1
-                << " | best Hamming distance = "
-                << std::setw(3) << dist
-                << " | position = "
-                << std::setw(3) << pos << "\n";
+            cout << "\n";
         }
-
-        cout << "----------------------------------------------------------\n";
-
-        for (size_t j = 0; j < ground_truth_30.size(); j++) {
-            auto [dist,pos] = best_hamming_match(consensus_sequences[i],
-            ground_truth_30[j]-> data);
-
-            cout << "vs J30B-" << j + 1
-                << " | best Hamming distance = "
-                << std::setw(3) << dist
-                << " | position = "
-                << std::setw(3) << pos << "\n";
+    } 
+    // Multi-file analysis: cross-sample validation
+    else {
+        // Open output file for cross-sample analysis
+        std::string analysis_output = "../data/clusters/cross_sample_analysis.txt";
+        std::ofstream analysis_file(analysis_output);
+        
+        cout << "\n========== Cross-Sample Analysis ==========\n";
+        analysis_file << "========== Cross-Sample Analysis ==========\n";
+        cout << "Comparing small clusters against large clusters for validation...\n\n";
+        analysis_file << "Comparing small clusters against large clusters for validation...\n\n";
+        
+        // Separate consensuses into large and small clusters
+        const int LARGE_CLUSTER_THRESHOLD = 100; // clusters >= 100 reads are considered "large"
+        const int HAMMING_THRESHOLD = 5; // consensuses within this distance are considered similar
+        
+        std::vector<size_t> large_cluster_indices;
+        std::vector<size_t> small_cluster_indices;
+        
+        for (size_t i = 0; i < all_consensuses.size(); i++) {
+            if (all_consensuses[i].cluster_size >= LARGE_CLUSTER_THRESHOLD) {
+                large_cluster_indices.push_back(i);
+            } else {
+                small_cluster_indices.push_back(i);
+            }
         }
-
-        cout << "\n";
+        
+        cout << "Found " << large_cluster_indices.size() << " large cluster(s) (>= " << LARGE_CLUSTER_THRESHOLD << " reads)\n";
+        analysis_file << "Found " << large_cluster_indices.size() << " large cluster(s) (>= " << LARGE_CLUSTER_THRESHOLD << " reads)\n";
+        cout << "Found " << small_cluster_indices.size() << " small cluster(s) (< " << LARGE_CLUSTER_THRESHOLD << " reads)\n\n";
+        analysis_file << "Found " << small_cluster_indices.size() << " small cluster(s) (< " << LARGE_CLUSTER_THRESHOLD << " reads)\n\n";
+        
+        // Track validated and unvalidated small clusters
+        std::vector<std::pair<size_t, std::vector<size_t>>> validated_small_clusters; // small cluster index -> matching large cluster indices
+        std::vector<size_t> unvalidated_small_clusters;
+        
+        // Compare each small cluster against all large clusters
+        for (size_t small_idx : small_cluster_indices) {
+            std::vector<size_t> matching_large_clusters;
+            const auto& small_cons = all_consensuses[small_idx];
+            
+            for (size_t large_idx : large_cluster_indices) {
+                const auto& large_cons = all_consensuses[large_idx];
+                
+                // PERFORMANCE FIX 1: Skip if they come from the same FASTQ source
+                if (small_cons.sample_name == large_cons.sample_name) {
+                    continue; 
+                }
+                
+                // PERFORMANCE FIX 2: Fast heuristic pre-check using Minimizers
+                // If their alignment-free k-mer distance is high, they cannot pass a tight Hamming threshold
+                double min_dist = minimizer_distance(small_cons.sequence, large_cons.sequence, 11, 5);
+                if (min_dist > 0.45) { 
+                    continue; // Skip slow graph alignment completely!
+                }
+                
+                // If they pass the pre-check, compute precise alignment distance
+                int dist = hamming_distance_aligned(small_cons.sequence, large_cons.sequence);
+                if (dist <= HAMMING_THRESHOLD) {
+                    matching_large_clusters.push_back(large_idx);
+                }
+            }
+            
+            if (!matching_large_clusters.empty()) {
+                validated_small_clusters.push_back({small_idx, matching_large_clusters});
+            } else {
+                unvalidated_small_clusters.push_back(small_idx);
+            }
+        }
+        
+        // Report validated small clusters
+        cout << "========== VALIDATED Small Clusters (match large clusters) ==========\n";
+        analysis_file << "========== VALIDATED Small Clusters (match large clusters) ==========\n";
+        cout << "Count: " << validated_small_clusters.size() << "\n\n";
+        analysis_file << "Count: " << validated_small_clusters.size() << "\n\n";
+        
+        for (size_t v = 0; v < validated_small_clusters.size(); v++) {
+            auto [small_idx, large_matches] = validated_small_clusters[v];
+            const auto& small_cons = all_consensuses[small_idx];
+            
+            cout << "Small Cluster " << v + 1 << ":\n";
+            analysis_file << "Small Cluster " << v + 1 << ":\n";
+            cout << "  Sample: " << small_cons.sample_name << "\n";
+            analysis_file << "  Sample: " << small_cons.sample_name << "\n";
+            cout << "  Size: " << small_cons.cluster_size << " reads\n";
+            analysis_file << "  Size: " << small_cons.cluster_size << " reads\n";
+            cout << "  Matches with " << large_matches.size() << " large cluster(s):\n";
+            analysis_file << "  Matches with " << large_matches.size() << " large cluster(s):\n";
+            
+            for (size_t large_idx : large_matches) {
+                const auto& large_cons = all_consensuses[large_idx];
+                int dist = hamming_distance_aligned(small_cons.sequence, large_cons.sequence);
+                cout << "    - " << large_cons.sample_name << " (size: " << large_cons.cluster_size 
+                     << " reads, distance: " << dist << ")\n";
+                analysis_file << "    - " << large_cons.sample_name << " (size: " << large_cons.cluster_size 
+                              << " reads, distance: " << dist << ")\n";
+            }
+            
+            cout << "  Sequence: " << small_cons.sequence << "\n";
+            analysis_file << "  Sequence: " << small_cons.sequence << "\n";
+            cout << "  POSSIBLE VARIANT: Confirmed by appearance in large clusters\n\n\n\n";
+            analysis_file << "  POSSIBLE VARIANT: Confirmed by appearance in large clusters\n\n\n\n";
+        }
+        
+        // Report unvalidated small clusters
+        cout << "========== UNVALIDATED Small Clusters (no match with large clusters) ==========\n";
+        analysis_file << "========== UNVALIDATED Small Clusters (no match with large clusters) ==========\n";
+        cout << "Count: " << unvalidated_small_clusters.size() << "\n\n";
+        analysis_file << "Count: " << unvalidated_small_clusters.size() << "\n\n";
+        
+        for (size_t u = 0; u < unvalidated_small_clusters.size(); u++) {
+            size_t small_idx = unvalidated_small_clusters[u];
+            const auto& small_cons = all_consensuses[small_idx];
+            
+            cout << "Small Cluster " << u + 1 << ":\n";
+            analysis_file << "Small Cluster " << u + 1 << ":\n";
+            cout << "  Sample: " << small_cons.sample_name << "\n";
+            analysis_file << "  Sample: " << small_cons.sample_name << "\n";
+            cout << "  Size: " << small_cons.cluster_size << " reads\n";
+            analysis_file << "  Size: " << small_cons.cluster_size << " reads\n";
+            cout << "  Sequence: " << small_cons.sequence << "\n";
+            analysis_file << "  Sequence: " << small_cons.sequence << "\n";
+            cout << "  POSSIBLE NOISE: No match with large clusters\n\n\n\n";
+            analysis_file << "  POSSIBLE NOISE: No match with large clusters\n\n\n\n";
+        }
+        
+        // Summary
+        cout << "========== Summary ==========\n";
+        analysis_file << "========== Summary ==========\n";
+        cout << "Total small clusters: " << small_cluster_indices.size() << "\n";
+        analysis_file << "Total small clusters: " << small_cluster_indices.size() << "\n";
+        cout << "Validated (possible variants): " << validated_small_clusters.size() << "\n";
+        analysis_file << "Validated (possible variants): " << validated_small_clusters.size() << "\n";
+        cout << "Unvalidated (possible noise): " << unvalidated_small_clusters.size() << "\n";
+        analysis_file << "Unvalidated (possible noise): " << unvalidated_small_clusters.size() << "\n";
+        
+        analysis_file.close();
+        cout << "\nCross-sample analysis saved to: " << analysis_output << "\n";
     }
-    */
 
     return 0;
 }
