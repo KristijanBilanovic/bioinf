@@ -418,6 +418,34 @@ std::vector<std::string> generate_msa(
     return graph.GenerateMultipleSequenceAlignment();
 }
 
+/*
+    Function to save consensus sequences as FASTQ file.
+    Each sequence is named by the cluster size.
+    @param consensus_sequences: vector of consensus sequences
+    @param clusters: vector of clusters (for size information)
+    @param output_filepath: path to output FASTQ file
+*/
+void save_consensus_fastq(
+    const std::vector<std::string>& consensus_sequences,
+    const std::vector<std::vector<int>>& clusters,
+    const std::string& output_filepath)
+{
+    std::ofstream outfile(output_filepath);
+    
+    for (size_t i = 0; i < consensus_sequences.size(); i++) {
+        // Create sequence name based on cluster size
+        std::string seq_name = "cluster_size_" + std::to_string(clusters[i].size());
+        
+        // Write FASTQ format: @name, sequence, +, quality scores (all A's as placeholder)
+        outfile << "@" << seq_name << "\n";
+        outfile << consensus_sequences[i] << "\n";
+        outfile << "+\n";
+        outfile << std::string(consensus_sequences[i].size(), 'A') << "\n";
+    }
+    
+    outfile.close();
+}
+
 //Clusters aligned sequences using greedy approach and Hamming distance
 std::vector<std::vector<int>> cluster_sequences(
     const std::vector<std::string>& msa,
@@ -464,14 +492,24 @@ std::vector<std::vector<int>> cluster_sequences(
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        cout << "Usage: ./jelen_analiza <file.fastq>\n";
-        return 1;
-    }
-
     // Load ground truth data (for evaluation)
     auto ground_truth_29 = ParseDataFA("../data/J29B_expected.fasta");
     auto ground_truth_30 = ParseDataFA("../data/J30B_expected.fasta");
+
+    // Ask user if they want to analyze one file or all files
+    cout << "\n========== File Selection ==========\n";
+    cout << "1) Analyze a single file\n";
+    cout << "2) Analyze all files in ../data/fastq/\n";
+    cout << "Enter choice (1 or 2): ";
+    
+    int file_choice;
+    cin >> file_choice;
+    cin.ignore(); // ignore newline after cin
+    
+    if (file_choice != 1 && file_choice != 2) {
+        cout << "Invalid choice. Using single file analysis.\n";
+        file_choice = 1;
+    }
 
     // Ask user which pipeline to use
     cout << "\n========== Pipeline Selection ==========\n";
@@ -479,50 +517,99 @@ int main(int argc, char* argv[]) {
     cout << "2) With Minimizers (parse -> filter -> cluster -> consensus)\n";
     cout << "Enter choice (1 or 2): ";
     
-    int choice;
-    cin >> choice;
+    int pipeline_choice;
+    cin >> pipeline_choice;
+    cin.ignore(); // ignore newline after cin
     
-    if (choice != 1 && choice != 2) {
+    if (pipeline_choice != 1 && pipeline_choice != 2) {
         cout << "Invalid choice. Using standard pipeline.\n";
-        choice = 1;
+        pipeline_choice = 1;
     }
     cout << "========================================\n\n";
 
-    // Load FASTQ data from the provided file path
-    auto sequences = ParseDataFQ(argv[1]);
-    cout << "Parsed: " << sequences.size() << " sequences.\n";
-
-    // Filter sequences by length (keep those close to mode length)
-    auto filtered = filter_by_length(sequences);
-    cout << "Filtered: " << filtered.size() << " sequences.\n";
-
-    std::vector<std::string> consensus_sequences;
-    std::vector<std::vector<int>> clusters;
-
-    if (choice == 1) {
-        // Standard pipeline: parse -> filter -> msa -> cluster -> consensus
-        cout << "\nUsing STANDARD pipeline (MSA + clustering)...\n";
-        auto msa = generate_msa(filtered);
-
-        // Cluster sequences before aligning
-        clusters = cluster_sequences(msa);
-        cout << "Clusters: " << clusters.size() << "\n";
-
-        // Generate consensus sequences for each cluster
-        consensus_sequences = get_cluster_consensus(filtered, clusters);
-    } else {
-        // Minimizers pipeline: parse -> filter -> cluster -> consensus
-        cout << "\nUsing MINIMIZERS pipeline...\n";
-        
-        // Cluster sequences using minimizers
-        clusters = cluster(filtered);
-        cout << "Clusters: " << clusters.size() << "\n";
-
-        // Generate consensus sequences for each cluster
-        consensus_sequences = get_cluster_consensus(filtered, clusters);
+    // Create clusters output directory if it doesn't exist
+    std::filesystem::path clusters_dir("../data/clusters");
+    if (!std::filesystem::exists(clusters_dir)) {
+        std::filesystem::create_directories(clusters_dir);
+        cout << "Created directory: ../data/clusters/\n\n";
     }
 
-    // Print consensus sequences and comparison
+    // Determine which files to process
+    std::vector<std::string> files_to_process;
+    
+    if (file_choice == 1) {
+        cout << "Enter FASTQ filename (e.g., J30_B_CE_IonXpress_006.fastq): ";
+        std::string filename;
+        std::getline(cin, filename);
+
+        if (filename.size() < 6 || filename.substr(filename.size() - 6) != ".fastq") {
+            filename += ".fastq";
+        }
+
+        files_to_process.push_back("../data/fastq/" + filename);
+    } else {
+        // Collect all .fastq files from ../data/fastq/ that start with 'J_'
+        std::filesystem::path fastq_dir("../data/fastq");
+        if (std::filesystem::exists(fastq_dir)) {
+            for (const auto& entry : std::filesystem::directory_iterator(fastq_dir)) {
+                auto fname = entry.path().filename().string();
+                if (entry.path().extension() == ".fastq" && fname.rfind("J_", 0) == 0) {
+                    files_to_process.push_back(entry.path().string());
+                }
+            }
+            std::sort(files_to_process.begin(), files_to_process.end());
+            cout << "Found " << files_to_process.size() << " FASTQ files to process (starting with 'J_').\n\n";
+        } else {
+            cout << "Error: ../data/fastq/ directory not found.\n";
+            return 1;
+        }
+    }
+
+    // Process each file
+    for (const auto& filepath : files_to_process) {
+        cout << "\n========== Processing: " << std::filesystem::path(filepath).filename().string() << " ==========\n";
+
+        // Load FASTQ data
+        auto sequences = ParseDataFQ(filepath);
+        cout << "Parsed: " << sequences.size() << " sequences.\n";
+
+        // Filter sequences by length
+        auto filtered = filter_by_length(sequences);
+        cout << "Filtered: " << filtered.size() << " sequences.\n";
+
+        std::vector<std::string> consensus_sequences;
+        std::vector<std::vector<int>> clusters;
+
+        if (pipeline_choice == 1) {
+            // Standard pipeline
+            cout << "Using STANDARD pipeline (MSA + clustering)...\n";
+            auto msa = generate_msa(filtered);
+
+            clusters = cluster_sequences(msa);
+            cout << "Clusters: " << clusters.size() << "\n";
+
+            consensus_sequences = get_cluster_consensus(filtered, clusters);
+        } else {
+            // Minimizers pipeline
+            cout << "Using MINIMIZERS pipeline...\n";
+            
+            clusters = cluster(filtered);
+            cout << "Clusters: " << clusters.size() << "\n";
+
+            consensus_sequences = get_cluster_consensus(filtered, clusters);
+        }
+
+        // Save consensus sequences to FASTQ file
+        std::string seq_name = std::filesystem::path(filepath).stem().string();
+        std::string output_file = "../data/clusters/" + seq_name + "_CLUSTERS.fastq";
+        save_consensus_fastq(consensus_sequences, clusters, output_file);
+        cout << "Saved consensus sequences to: " << output_file << "\n";
+
+        cout << "Finished with file: " << seq_name << "\n";
+    }
+
+    // Print comparison (commented out)
+    /*
     cout << "\n========== Results ==========\n\n";
     for (size_t i = 0; i < consensus_sequences.size(); i++) {
 
@@ -557,6 +644,7 @@ int main(int argc, char* argv[]) {
 
         cout << "\n";
     }
+    */
 
     return 0;
 }
