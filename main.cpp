@@ -548,17 +548,17 @@ int main(int argc, char* argv[]) {
 
         files_to_process.push_back("../data/fastq/" + filename);
     } else {
-        // Collect all .fastq files from ../data/fastq/ that start with 'J_'
+        // Collect all .fastq files from ../data/fastq/ that start with 'J'
         std::filesystem::path fastq_dir("../data/fastq");
         if (std::filesystem::exists(fastq_dir)) {
             for (const auto& entry : std::filesystem::directory_iterator(fastq_dir)) {
                 auto fname = entry.path().filename().string();
-                if (entry.path().extension() == ".fastq" && fname.rfind("J_", 0) == 0) {
+                if (entry.path().extension() == ".fastq" && !fname.empty() && fname[0] == 'J') {
                     files_to_process.push_back(entry.path().string());
                 }
             }
             std::sort(files_to_process.begin(), files_to_process.end());
-            cout << "Found " << files_to_process.size() << " FASTQ files to process (starting with 'J_').\n\n";
+            cout << "Found " << files_to_process.size() << " FASTQ files to process (starting with 'J').\n\n";
         } else {
             cout << "Error: ../data/fastq/ directory not found.\n";
             return 1;
