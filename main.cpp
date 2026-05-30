@@ -419,11 +419,41 @@ std::vector<std::string> generate_msa(
 }
 
 /*
-    Function to save consensus sequences as FASTA file.
-    Each sequence is named by the cluster size.
+    Function to save cluster membership information.
+    Records which original sequences belong to each cluster.
+    @param seqs: vector of sequences
+    @param clusters: vector of clusters, where each cluster is a vector of sequence indices
+    @param output_filepath: path to output file
+*/
+void save_cluster_members(
+    const std::vector<std::unique_ptr<Sequence>>& seqs,
+    const std::vector<std::vector<int>>& clusters,
+    const std::string& output_filepath)
+{
+    std::ofstream outfile(output_filepath);
+    
+    for (size_t c = 0; c < clusters.size(); c++) {
+        const auto& cluster = clusters[c];
+        
+        // Write cluster header
+        outfile << "Cluster_" << c << " (size: " << cluster.size() << "):\n";
+        
+        // Write each sequence name in the cluster
+        for (int idx : cluster) {
+            outfile << "  " << seqs[idx]->name << "\n";
+        }
+        
+        outfile << "\n";
+    }
+    
+    outfile.close();
+}
+
+/*
+    Function to save consensus sequences to a FASTA file.
     @param consensus_sequences: vector of consensus sequences
-    @param clusters: vector of clusters (for size information)
-    @param output_filepath: path to output FASTA file
+    @param clusters: vector of clusters (for sizing)
+    @param output_filepath: path to output file
 */
 void save_consensus_fastq(
     const std::vector<std::string>& consensus_sequences,
@@ -608,6 +638,13 @@ int main(int argc, char* argv[]) {
         cout << "Created directory: ../data/clusters/\n\n";
     }
 
+    // Create cluster_members output directory if it doesn't exist
+    std::filesystem::path cluster_members_dir("../data/cluster_members");
+    if (!std::filesystem::exists(cluster_members_dir)) {
+        std::filesystem::create_directories(cluster_members_dir);
+        cout << "Created directory: ../data/cluster_members/\n\n";
+    }
+
     // Determine which files to process
     std::vector<std::string> files_to_process;
     
@@ -696,6 +733,11 @@ int main(int argc, char* argv[]) {
         // Save consensus sequences to FASTQ file
         save_consensus_fastq(consensus_sequences, clusters, output_file);
         cout << "Saved consensus sequences to: " << output_file << "\n";
+
+        // Save cluster membership information
+        std::string members_file = "../data/cluster_members/" + seq_name + "_CLUSTER_MEMBERS.txt";
+        save_cluster_members(filtered, clusters, members_file);
+        cout << "Saved cluster members to: " << members_file << "\n";
 
         // Store metadata for cross-sample analysis
         for (size_t i = 0; i < consensus_sequences.size(); i++) {
