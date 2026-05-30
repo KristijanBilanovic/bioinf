@@ -308,63 +308,60 @@ double minimizer_distance(const string& s1, const string& s2,
 
 
 /*
-    Clusters sequences based on their minimizer similarity.
+    Clusters sequences using greedy approach with centroid-based distance.
+    Each cluster is represented by its first sequence (centroid).
+    New sequence is compared only to the centroid of each existing cluster.
+    If distance to centroid is within threshold, sequence is added to that cluster.
+    Otherwise, a new cluster is created with this sequence as centroid.
     @param seqs: vector of sequences to cluster
     @return: vector of clusters, where each cluster is a vector of sequence indices
 */
 std::vector<std::vector<int>> cluster(
     const std::vector<std::unique_ptr<Sequence>>& seqs)
 {
-    // parameters for minimizer generation provided in lecture slides
-    int k = 11;
-    int w = 5;
-    double threshold = 0.33;
-    
+    // parameters from lecture slides
+    int k = 11;  // k-mer length for minimizer generation
+    int w = 5;   // window size for minimizer selection
+    double threshold = 0.33; // maximum distance to join a cluster
+
     std::vector<std::vector<int>> clusters;
-    
+    std::vector<int> centroids; // index of centroid (first sequence) of each cluster
+
     for (int i = 0; i < (int)seqs.size(); i++) {
         bool assigned = false;
-        
-        // Try to assign to existing cluster
+
+        // compare current sequence to centroid of each existing cluster
         for (int c = 0; c < (int)clusters.size(); c++) {
-            // Compare to multiple sequences in cluster, not just representative
-            int comparisons = 0;
-            int similar_count = 0;
-            
-            for (int idx : clusters[c]) {
-                if (comparisons >= 5) break; // Limit comparisons for efficiency
-                
-                double distance = minimizer_distance(
-                    seqs[i]->data, 
-                    seqs[idx]->data, 
-                    k, w
-                );
-                
-                if (distance <= threshold) {
-                    similar_count++;
-                }
-                comparisons++;
-            }
-            
-            // Assign if similar to majority of compared sequences
-            if (similar_count >= (comparisons / 2 + 1)) {
+
+            // compute minimizer distance between current sequence and centroid
+            double distance = minimizer_distance(
+                seqs[i]->data,            // current sequence
+                seqs[centroids[c]]->data, // centroid of cluster c
+                k, w
+            );
+
+            // if close enough to centroid, add to this cluster and stop
+            if (distance <= threshold) {
                 clusters[c].push_back(i);
                 assigned = true;
                 break;
             }
         }
-        
+
+        // if not close to any centroid, create new cluster
+        // current sequence becomes the centroid of the new cluster
         if (!assigned) {
             clusters.push_back({i});
+            centroids.push_back(i);
         }
     }
 
-    // sort clusters by size (largest first)
+    // sort clusters by size, largest first
     sort(clusters.begin(), clusters.end(),
         [](const vector<int>& a, const vector<int>& b) {
             return a.size() > b.size();
         });
-    
+
     return clusters;
 }
 
@@ -437,30 +434,27 @@ int main(int argc, char* argv[]) {
 
         for (size_t j = 0; j < ground_truth_29.size(); j++) {
 
-            auto [dist, pos] =
-                best_hamming_match(
-                    consensus_sequences[i],
-                    ground_truth_29[j]->data
-                );
+            auto [dist,pos] = best_hamming_match(consensus_sequences[i],
+            ground_truth_29[j]-> data);
 
             cout << "vs J29B-" << j + 1
                 << " | best Hamming distance = "
                 << std::setw(3) << dist
                 << " | position = "
-                << std::setw(3) <<pos
-                << "\n";
+                << std::setw(3) << pos << "\n";
         }
 
         cout << "----------------------------------------------------------\n";
 
         for (size_t j = 0; j < ground_truth_30.size(); j++) {
-            auto [dist, pos] = best_hamming_match(
-                consensus_sequences[i], ground_truth_30[j]->data);
+            auto [dist,pos] = best_hamming_match(consensus_sequences[i],
+            ground_truth_30[j]-> data);
+
             cout << "vs J30B-" << j + 1
-                 << " | best Hamming distance = " 
-                 << std::setw(3) << dist
-                 << " | position = " 
-                 << std::setw(3) << pos << "\n";
+                << " | best Hamming distance = "
+                << std::setw(3) << dist
+                << " | position = "
+                << std::setw(3) << pos << "\n";
         }
 
         cout << "\n";

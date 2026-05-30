@@ -7,6 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <algorithm>
+#include <string> 
 
 /*
     Sequence structure to hold the name, data, and quality of a sequence read from a FASTQ file.
