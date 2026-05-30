@@ -400,6 +400,69 @@ std::vector<std::string> get_cluster_consensus(
     return consensus_sequences;
 }
 
+// generates MSA using spoa
+std::vector<std::string> generate_msa(
+    const std::vector<std::unique_ptr<Sequence>>& seqs)
+{
+    auto engine = spoa::AlignmentEngine::Create(
+        spoa::AlignmentType::kNW,
+        3,   // match
+        -5,  // mismatch
+        -3   // gap
+    );
+    spoa::Graph graph{};
+    for (const auto& s : seqs) {
+        auto alignment = engine->Align(s->data, graph);
+        graph.AddAlignment(alignment, s->data);
+    }
+    return graph.GenerateMultipleSequenceAlignment();
+}
+
+//Clusters aligned sequences using greedy approach and Hamming distance
+std::vector<std::vector<int>> cluster_sequences(
+    const std::vector<std::string>& msa,
+    int k = 12) // k is the maximum Hamming distance to cluster together
+{
+    std::vector<std::vector<int>> clusters;
+    std::vector<int> representatives; 
+
+    for (int i = 0; i < (int)msa.size(); i++) {
+        bool added = false;
+
+        // compare current sequence with representatives of existing clusters
+        for (int c = 0; c < (int)clusters.size(); c++) {
+            int rep = representatives[c];
+
+            //hamming distance of current sequence and representative
+            int dist = 0;
+            for (int p = 0; p < (int)msa[i].size(); p++) {
+                if (msa[i][p] != msa[rep][p]) dist++;
+            }
+
+            // if close enough to representative, add to cluster and stop looking
+            if (dist < k) {
+                clusters[c].push_back(i);
+                added = true;
+                break;
+            }
+        }
+
+        // if not close to any representative, create new cluster with this sequence as representative
+        if (!added) {
+            clusters.push_back({i});
+            representatives.push_back(i);
+        }
+    }
+
+    //  sort clusters by size, largest first
+    std::sort(clusters.begin(), clusters.end(),
+        [](const std::vector<int>& a, const std::vector<int>& b) {
+            return a.size() > b.size();
+        });
+
+    return clusters;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         cout << "Usage: ./jelen_analiza <file.fastq>\n";
@@ -410,6 +473,21 @@ int main(int argc, char* argv[]) {
     auto ground_truth_29 = ParseDataFA("../data/J29B_expected.fasta");
     auto ground_truth_30 = ParseDataFA("../data/J30B_expected.fasta");
 
+    // Ask user which pipeline to use
+    cout << "\n========== Pipeline Selection ==========\n";
+    cout << "1) Standard (parse -> filter -> msa -> cluster -> consensus)\n";
+    cout << "2) With Minimizers (parse -> filter -> cluster -> consensus)\n";
+    cout << "Enter choice (1 or 2): ";
+    
+    int choice;
+    cin >> choice;
+    
+    if (choice != 1 && choice != 2) {
+        cout << "Invalid choice. Using standard pipeline.\n";
+        choice = 1;
+    }
+    cout << "========================================\n\n";
+
     // Load FASTQ data from the provided file path
     auto sequences = ParseDataFQ(argv[1]);
     cout << "Parsed: " << sequences.size() << " sequences.\n";
@@ -418,14 +496,34 @@ int main(int argc, char* argv[]) {
     auto filtered = filter_by_length(sequences);
     cout << "Filtered: " << filtered.size() << " sequences.\n";
 
-    // Cluster sequances before aligning
-    auto clusters = cluster(filtered);
-    cout << "Clusters: " << clusters.size() << "\n";
+    std::vector<std::string> consensus_sequences;
+    std::vector<std::vector<int>> clusters;
 
-    // Generate consensus sequences for each cluster
-    auto consensus_sequences = get_cluster_consensus(filtered, clusters); 
+    if (choice == 1) {
+        // Standard pipeline: parse -> filter -> msa -> cluster -> consensus
+        cout << "\nUsing STANDARD pipeline (MSA + clustering)...\n";
+        auto msa = generate_msa(filtered);
 
-    // print consensus sequences
+        // Cluster sequences before aligning
+        clusters = cluster_sequences(msa);
+        cout << "Clusters: " << clusters.size() << "\n";
+
+        // Generate consensus sequences for each cluster
+        consensus_sequences = get_cluster_consensus(filtered, clusters);
+    } else {
+        // Minimizers pipeline: parse -> filter -> cluster -> consensus
+        cout << "\nUsing MINIMIZERS pipeline...\n";
+        
+        // Cluster sequences using minimizers
+        clusters = cluster(filtered);
+        cout << "Clusters: " << clusters.size() << "\n";
+
+        // Generate consensus sequences for each cluster
+        consensus_sequences = get_cluster_consensus(filtered, clusters);
+    }
+
+    // Print consensus sequences and comparison
+    cout << "\n========== Results ==========\n\n";
     for (size_t i = 0; i < consensus_sequences.size(); i++) {
 
         if (clusters[i].size() < 4) continue; // skip small clusters
