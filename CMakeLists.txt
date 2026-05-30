@@ -3,6 +3,9 @@ project(JelenProject)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Find zlib (required by bioparser)
+find_package(ZLIB REQUIRED)
+
 # --- SPOA SEKCIJA ---
 set(spoa_build_exe OFF CACHE BOOL "" FORCE)
 set(spoa_build_tests OFF CACHE BOOL "" FORCE)
@@ -17,14 +20,14 @@ target_include_directories(bioparser INTERFACE ${CMAKE_SOURCE_DIR}/vendor/spoa/b
 # Add your own source files here
 add_executable(jelen_analiza 
     main.cpp
-    src/MyClass.cpp
+    src/sequence_analyzer.cpp
 )
 
 # Include your headers
 target_include_directories(jelen_analiza PRIVATE include)
 
 # Link libraries (bioparser is included via spoa)
-target_link_libraries(jelen_analiza spoa bioparser)
+target_link_libraries(jelen_analiza spoa bioparser ZLIB::ZLIB)
 
 # Ensure SPOA is built first
 add_dependencies(jelen_analiza spoa)
