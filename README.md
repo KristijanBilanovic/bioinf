@@ -158,18 +158,6 @@ bioinf/
 
 ---
 
-## How It Works (Brief)
-
-1. **Parse** - reads FASTQ files in 1 GB batches
-2. **Filter** - keeps only reads within ±5 bp of the modal length (removes 30–70% of reads, retaining valid biology)
-3. **Cluster** - groups similar sequences together:
-   - *Standard*: aligns all sequences via SPOA, then clusters by Hamming distance (threshold: 12)
-   - *Minimizers*: extracts k-mer minimizers (k=11, w=5), scores similarity via LIS, clusters greedily (threshold: 0.33)
-4. **Consensus** - generates one representative sequence per cluster using SPOA
-5. **Cross-sample validation** *(multi-file mode only)* - validates small clusters against large clusters from other samples to separate real variants from sequencing noise
-
----
-
 ## Key Parameters
 
 ```cpp
