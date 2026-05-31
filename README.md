@@ -1,4 +1,4 @@
-# 🧬 Gene Variant Discovery — Bioinformatics Project
+#  Discovering the Gene Variants - Bioinformatics 1 project
 
 Computational pipeline for discovering gene variants from FASTQ sequencing reads.  
 Implements two approaches: **Standard (MSA-based)** and **Minimizers (fast k-mer based)**.
@@ -93,13 +93,12 @@ cd build
 ./jelen_analiza
 ```
 
-The program uses an interactive CLI — no flags needed.
 
 ---
 
 ## Interactive CLI
 
-### Step 1 — File selection
+### Step 1 - File selection
 
 ```
 ========== File Selection ==========
@@ -111,7 +110,7 @@ Enter choice (1 or 2):
 - **Option 1**: Analyze one FASTQ file. You'll be prompted for the filename and the ground truth reference to validate against (e.g. `J29B` or `J30B`).
 - **Option 2**: Automatically processes all files starting with `J` in `data/fastq/` and runs cross-sample validation across all samples.
 
-### Step 2 — Pipeline selection
+### Step 2 - Pipeline selection
 
 ```
 ========== Pipeline Selection ==========
@@ -161,13 +160,13 @@ bioinf/
 
 ## How It Works (Brief)
 
-1. **Parse** — reads FASTQ files in 1 GB batches
-2. **Filter** — keeps only reads within ±5 bp of the modal length (removes 30–70% of reads, retaining valid biology)
-3. **Cluster** — groups similar sequences together:
+1. **Parse** - reads FASTQ files in 1 GB batches
+2. **Filter** - keeps only reads within ±5 bp of the modal length (removes 30–70% of reads, retaining valid biology)
+3. **Cluster** - groups similar sequences together:
    - *Standard*: aligns all sequences via SPOA, then clusters by Hamming distance (threshold: 12)
    - *Minimizers*: extracts k-mer minimizers (k=11, w=5), scores similarity via LIS, clusters greedily (threshold: 0.33)
-4. **Consensus** — generates one representative sequence per cluster using SPOA
-5. **Cross-sample validation** *(multi-file mode only)* — validates small clusters against large clusters from other samples to separate real variants from sequencing noise
+4. **Consensus** - generates one representative sequence per cluster using SPOA
+5. **Cross-sample validation** *(multi-file mode only)* - validates small clusters against large clusters from other samples to separate real variants from sequencing noise
 
 ---
 
